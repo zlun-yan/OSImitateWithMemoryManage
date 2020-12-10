@@ -10,11 +10,8 @@ public class SettingDialog extends JFrame {
     private JSpinner randomTimeMaxSpinner;
     private JSpinner randomPriorityMinSpinner;
     private JSpinner randomPriorityMaxSpinner;
-
-    private static int randomTimeMin;
-    private static int randomTimeMax;
-    private static int randomPriorityMin;
-    private static int randomPriorityMax;
+    private JSpinner randomMemoryMinSpinner;
+    private JSpinner randomMemoryMaxSpinner;
 
     public SettingDialog() {
         init();
@@ -26,35 +23,42 @@ public class SettingDialog extends JFrame {
     }
 
     private void init() {
-        randomTimeMin = ControllerPanel.getTimeMinn();
-        randomTimeMax = ControllerPanel.getTimeMaxx();
-        randomPriorityMin = ControllerPanel.getPriorityMinn();
-        randomPriorityMax = ControllerPanel.getPriorityMaxx();
-
-        randomTimeMinSpinner = new JSpinner(new SpinnerNumberModel(randomTimeMin, 1, 2048, 1));
-        randomTimeMaxSpinner = new JSpinner(new SpinnerNumberModel(randomTimeMax, 1, 2048, 1));
-        randomPriorityMinSpinner = new JSpinner(new SpinnerNumberModel(randomPriorityMin, 1, 2048, 1));
-        randomPriorityMaxSpinner = new JSpinner(new SpinnerNumberModel(randomPriorityMax, 1, 2048, 1));
+        randomTimeMinSpinner = new JSpinner(new SpinnerNumberModel(ControllerPanel.getTimeMinn(), 1, 2048, 1));
+        randomTimeMaxSpinner = new JSpinner(new SpinnerNumberModel(ControllerPanel.getTimeMaxx(), 1, 2048, 1));
+        randomPriorityMinSpinner = new JSpinner(new SpinnerNumberModel(ControllerPanel.getPriorityMinn(), 1, 2048, 1));
+        randomPriorityMaxSpinner = new JSpinner(new SpinnerNumberModel(ControllerPanel.getPriorityMaxx(), 1, 2048, 1));
+        randomMemoryMinSpinner = new JSpinner(new SpinnerNumberModel(ControllerPanel.getMemoryMinn(), 1, 2048, 1));
+        randomMemoryMaxSpinner = new JSpinner(new SpinnerNumberModel(ControllerPanel.getMemoryMaxx(), 1, 2048, 1));
 
         randomTimeMinSpinner.addChangeListener(event -> {
             int value = (int) randomTimeMinSpinner.getValue();
-            if (value > randomTimeMax) randomTimeMinSpinner.setValue(value - 1);
-            else randomTimeMin = value;
+            int maxx = (int) randomTimeMaxSpinner.getValue();
+            if (value > maxx) randomTimeMinSpinner.setValue(maxx);
         });
         randomTimeMaxSpinner.addChangeListener(event -> {
             int value = (int) randomTimeMaxSpinner.getValue();
-            if (value < randomTimeMin) randomTimeMaxSpinner.setValue(value + 1);
-            else randomTimeMax = value;
+            int minn = (int) randomTimeMinSpinner.getValue();
+            if (value < minn) randomTimeMaxSpinner.setValue(minn);
         });
         randomPriorityMinSpinner.addChangeListener(event -> {
             int value = (int) randomPriorityMinSpinner.getValue();
-            if (value > randomPriorityMax) randomPriorityMinSpinner.setValue(value - 1);
-            else randomPriorityMin = value;
+            int maxx = (int) randomPriorityMaxSpinner.getValue();
+            if (value > maxx) randomPriorityMinSpinner.setValue(maxx);
         });
         randomPriorityMaxSpinner.addChangeListener(event -> {
             int value = (int) randomPriorityMaxSpinner.getValue();
-            if (value < randomPriorityMin) randomPriorityMaxSpinner.setValue(value + 1);
-            else randomPriorityMax = value;
+            int minn = (int) randomPriorityMinSpinner.getValue();
+            if (value < minn) randomPriorityMaxSpinner.setValue(minn);
+        });
+        randomMemoryMinSpinner.addChangeListener(event -> {
+            int value = (int) randomMemoryMinSpinner.getValue();
+            int maxx = (int) randomMemoryMaxSpinner.getValue();
+            if (value > maxx) randomMemoryMinSpinner.setValue(maxx);
+        });
+        randomMemoryMaxSpinner.addChangeListener(event -> {
+            int value = (int) randomMemoryMaxSpinner.getValue();
+            int minn = (int) randomMemoryMinSpinner.getValue();
+            if (value < minn) randomMemoryMaxSpinner.setValue(minn);
         });
 
         JLabel randomTimeMinLabel = new JLabel("随机时间最小值: ");
@@ -85,11 +89,27 @@ public class SettingDialog extends JFrame {
         randomPriorityMaxPanel.add(randomPriorityMaxLabel);
         randomPriorityMaxPanel.add(randomPriorityMaxSpinner);
 
+        JLabel randomMemoryMinLabel = new JLabel("随机主存大小最小值: ");
+        randomMemoryMinLabel.setPreferredSize(new Dimension(120, 30));
+        randomMemoryMinSpinner.setPreferredSize(new Dimension(80, 30));
+        JPanel randomMemoryMinPanel = new JPanel();
+        randomMemoryMinPanel.add(randomMemoryMinLabel);
+        randomMemoryMinPanel.add(randomMemoryMinSpinner);
+
+        JLabel randomMemoryMaxLabel = new JLabel("随机主存大小最大值: ");
+        randomMemoryMaxLabel.setPreferredSize(new Dimension(120, 30));
+        randomMemoryMaxSpinner.setPreferredSize(new Dimension(80, 30));
+        JPanel randomMemoryMaxPanel = new JPanel();
+        randomMemoryMaxPanel.add(randomMemoryMaxLabel);
+        randomMemoryMaxPanel.add(randomMemoryMaxSpinner);
+
         Box box = Box.createVerticalBox();
         box.add(randomTimeMinPanel);
         box.add(randomTimeMaxPanel);
         box.add(randomPriorityMinPanel);
         box.add(randomPriorityMaxPanel);
+        box.add(randomMemoryMinPanel);
+        box.add(randomMemoryMaxPanel);
 
         add(box, BorderLayout.CENTER);
     }
@@ -99,10 +119,12 @@ public class SettingDialog extends JFrame {
         JButton cancelButton = new JButton("取消");
 
         confirmButton.addActionListener(event -> {
-            ControllerPanel.setTimeMinn(randomTimeMin);
-            ControllerPanel.setTimeMaxx(randomTimeMax);
-            ControllerPanel.setPriorityMinn(randomPriorityMin);
-            ControllerPanel.setPriorityMaxx(randomPriorityMax);
+            ControllerPanel.setTimeMinn((int) randomTimeMinSpinner.getValue());
+            ControllerPanel.setTimeMaxx((int) randomTimeMaxSpinner.getValue());
+            ControllerPanel.setPriorityMinn((int) randomPriorityMinSpinner.getValue());
+            ControllerPanel.setPriorityMaxx((int) randomPriorityMaxSpinner.getValue());
+            ControllerPanel.setMemoryMinn((int) randomMemoryMinSpinner.getValue());
+            ControllerPanel.setMemoryMaxx((int) randomMemoryMaxSpinner.getValue());
             dispose();
         });
         cancelButton.addActionListener(event -> dispose());
@@ -112,12 +134,5 @@ public class SettingDialog extends JFrame {
         buttonPanel.add(cancelButton);
 
         add(buttonPanel, BorderLayout.SOUTH);
-    }
-
-    public static void clear() {
-        randomTimeMin = 1;
-        randomTimeMax = 10;
-        randomPriorityMin = 1;
-        randomPriorityMax = 50;
     }
 }

@@ -1,7 +1,8 @@
 package org.csu.os.view.component;
 
-import org.csu.os.domain.table.RunningPCB;
-import org.csu.os.view.RecordDialog;
+import org.csu.os.domain.pojo.Progress;
+import org.csu.os.service.Static;
+import org.csu.os.service.controller.PCBController;
 import org.csu.os.view.MainFrame;
 import org.csu.os.view.SettingDialog;
 import org.jb2011.lnf.beautyeye.ch3_button.BEButtonUI;
@@ -10,31 +11,32 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.Random;
 
-import static org.csu.os.service.DispatchMode.*;
+import static org.csu.os.service.Static.mode;
 
 public class ControllerPanel extends JPanel {
     private SettingDialog settingDialog = null;
 
     private MainFrame parentFrame;
-    private static int timeSlice = 4;
-    private static boolean queueOrder = true;
+    private static boolean queueOrder = true;  // true为前台
 
     private static int timeMinn = 1;
     private static int timeMaxx = 10;
     private static int priorityMinn = 1;
     private static int priorityMaxx = 50;
+    private static int memoryMinn = 1;
+    private static int memoryMaxx = 100;
 
     private JTextField nameField;
     private JTextField timeField;
     private JTextField priorityField;
+    private JTextField memoryField;
 
-    private JLabel tipLabel;
+    private JLabel tipLabel;  // 错误输入提示
 
-    private JPanel timeSlicePanel;
     private JPanel radioButtonPanel;
 
     private Box box = Box.createVerticalBox();
-    private static int count = 0;
+    private static int count = 0;  // 随机添加计数
 
     public ControllerPanel(MainFrame parentFrame) {
         this.parentFrame = parentFrame;
@@ -46,29 +48,23 @@ public class ControllerPanel extends JPanel {
     }
 
     private void init() {
-        JLabel timeSliceDefaultLabel = new JLabel("时间片长度:");
-        timeSliceDefaultLabel.setPreferredSize(new Dimension(80, 30));
-        JSpinner timeSliceDefaultSpinner = new JSpinner(new SpinnerNumberModel(4, 1, 2048, 1));
-        timeSliceDefaultSpinner.setPreferredSize(new Dimension(120, 30));
-        timeSliceDefaultSpinner.addChangeListener(event -> {
-            timeSlice = (int) timeSliceDefaultSpinner.getValue();
-            RunningPCB.setTimeSliceDefault(timeSlice);
-        });
-
-
         JLabel nameLabel = new JLabel("进程名称:");
         JLabel timeLabel = new JLabel("预计运行时间:");
         JLabel priorityLabel = new JLabel("优先级:");
+        JLabel memoryLabel = new JLabel("所需主存大小");
         nameLabel.setPreferredSize(new Dimension(80, 30));
         timeLabel.setPreferredSize(new Dimension(80, 30));
         priorityLabel.setPreferredSize(new Dimension(80, 30));
+        memoryLabel.setPreferredSize(new Dimension(80, 30));
 
         nameField = new JTextField();
         timeField = new JTextField();
         priorityField = new JTextField();
+        memoryField = new JTextField();
         nameField.setPreferredSize(new Dimension(120, 30));
         timeField.setPreferredSize(new Dimension(120, 30));
         priorityField.setPreferredSize(new Dimension(120, 30));
+        memoryField.setPreferredSize(new Dimension(120, 30));
 
         JRadioButton receptionButton = new JRadioButton("前台", true);
         JRadioButton backgroundButton = new JRadioButton("后台");
@@ -88,11 +84,6 @@ public class ControllerPanel extends JPanel {
         radioButtonPanel.add(receptionButton);
         radioButtonPanel.add(backgroundButton);
 
-        timeSlicePanel = new JPanel();
-        timeSlicePanel.add(timeSliceDefaultLabel);
-        timeSlicePanel.add(timeSliceDefaultSpinner);
-
-
         tipLabel = new JLabel();
         tipLabel.setPreferredSize(new Dimension(200, 30));
         tipLabel.setVisible(false);
@@ -108,10 +99,18 @@ public class ControllerPanel extends JPanel {
         JPanel priorityPanel = new JPanel();
         priorityPanel.add(priorityLabel);
         priorityPanel.add(priorityField);
+        JPanel memoryPanel = new JPanel();
+        memoryPanel.add(memoryLabel);
+        memoryPanel.add(memoryField);
 
-        box.add(timeSlicePanel);
+        JPanel headerPanel = new JPanel();
+        JLabel headerLabel = new JLabel("操作", SwingConstants.CENTER);
+        headerPanel.add(headerLabel);
+
+        box.add(headerPanel);
         box.add(namePanel);
         box.add(timePanel);
+        box.add(memoryPanel);
         box.add(priorityPanel);
         box.add(radioButtonPanel);
         box.add(tipPanel);
@@ -131,24 +130,20 @@ public class ControllerPanel extends JPanel {
             String name = nameField.getText();
             String time = timeField.getText();
             String priority = priorityField.getText();
+            String memory = memoryField.getText();
 
+            int timeToInt, memoryToInt, priorityToInt = -1;
             if (name == null || name.equals("")) {
                 tipLabel.setText("请输入进程名称");
                 tipLabel.setVisible(true);
                 return;
             }
+
             if (time == null || time.equals("")) {
                 tipLabel.setText("请输入进程预计运行时间");
                 tipLabel.setVisible(true);
                 return;
             }
-            if (priority == null || priority.equals("")) {
-                tipLabel.setText("请输入进程优先级");
-                tipLabel.setVisible(true);
-                return;
-            }
-
-            int timeToInt, priorityToInt;
             try {
                 timeToInt = Integer.parseInt(time);
             } catch (NumberFormatException e) {
@@ -156,25 +151,50 @@ public class ControllerPanel extends JPanel {
                 tipLabel.setVisible(true);
                 return;
             }
+
+            if (memory == null || memory.equals("")) {
+                tipLabel.setText("请输入所需主存大小");
+                tipLabel.setVisible(true);
+                return;
+            }
             try {
-                priorityToInt = Integer.parseInt(priority);
+                memoryToInt = Integer.parseInt(memory);
             } catch (NumberFormatException e) {
-                tipLabel.setText("请输入整数优先级");
+                tipLabel.setText("请输入整数所需主存大小");
                 tipLabel.setVisible(true);
                 return;
             }
 
-            if (queueOrder) parentFrame.addProgress(name, timeToInt, priorityToInt, 1);
-            else parentFrame.addProgress(name, timeToInt, priorityToInt, 2);
+            Progress progress;
+            if ((mode == Static.DispatchMode.MQ && queueOrder) || mode == Static.DispatchMode.PSA) {
+                if (priority == null || priority.equals("")) {
+                    tipLabel.setText("请输入进程优先级");
+                    tipLabel.setVisible(true);
+                    return;
+                }
+                try {
+                    priorityToInt = Integer.parseInt(priority);
+                } catch (NumberFormatException e) {
+                    tipLabel.setText("请输入整数优先级");
+                    tipLabel.setVisible(true);
+                    return;
+                }
+            }
+
+            progress = new Progress(name, priorityToInt, timeToInt, memoryToInt, queueOrder ? 1 : 2);
+            PCBController.addProgress(progress);
+
             nameField.setText("");
             timeField.setText("");
             priorityField.setText("");
+            memoryField.setText("");
         });
         cancelButton.addActionListener(event -> {
             tipLabel.setVisible(false);
             nameField.setText("");
             timeField.setText("");
             priorityField.setText("");
+            memoryField.setText("");
         });
         randomAddButton.addActionListener(event -> {
             tipLabel.setVisible(false);
@@ -212,10 +232,18 @@ public class ControllerPanel extends JPanel {
         String name = "Random_" + ++count;
         int time = new Random().nextInt(timeMaxx - timeMinn) + timeMinn;
         int priority = new Random().nextInt(priorityMaxx - priorityMinn) + priorityMinn;
-        RecordDialog.refresh();
+        int memory = new Random().nextInt(memoryMaxx - memoryMinn) + memoryMinn;
+//        RecordDialog.refresh();
 
-        if (mode == Mode.MQ) parentFrame.addProgress(name, time, priority, new Random().nextInt(2) + 1);
-        else parentFrame.addProgress(name, time, priority, 1);
+        Progress progress;
+        if (mode == Static.DispatchMode.MQ) {
+            int randomQueueOrder = new Random().nextInt(2) + 1;
+            if (randomQueueOrder == 1) progress = new Progress(name, priority, time, memory, randomQueueOrder);
+            else progress = new Progress(name, -1, time, memory, randomQueueOrder);  // 如果是后台的话
+        }
+        else progress = new Progress(name, priority, time, memory, 1);
+
+        PCBController.addProgress(progress);
     }
 
     public static int getTimeMinn() {
@@ -250,8 +278,20 @@ public class ControllerPanel extends JPanel {
         ControllerPanel.priorityMaxx = priorityMaxx;
     }
 
-    public static int getTimeSlice() {
-        return timeSlice;
+    public static int getMemoryMinn() {
+        return memoryMinn;
+    }
+
+    public static void setMemoryMinn(int memoryMinn) {
+        ControllerPanel.memoryMinn = memoryMinn;
+    }
+
+    public static int getMemoryMaxx() {
+        return memoryMaxx;
+    }
+
+    public static void setMemoryMaxx(int memoryMaxx) {
+        ControllerPanel.memoryMaxx = memoryMaxx;
     }
 
     public static void clear() {
@@ -263,10 +303,7 @@ public class ControllerPanel extends JPanel {
     }
 
     public void refresh() {
-        if (mode != Mode.MQ && mode != Mode.RR && mode != Mode.MFQ) timeSlicePanel.setVisible(false);
-        else timeSlicePanel.setVisible(true);
-
-        if (mode != Mode.MQ) radioButtonPanel.setVisible(false);
+        if (mode != Static.DispatchMode.MQ) radioButtonPanel.setVisible(false);
         else radioButtonPanel.setVisible(true);
     }
 }

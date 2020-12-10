@@ -1,26 +1,29 @@
 package org.csu.os.service;
 
-import org.csu.os.domain.pojo.MyPCB;
-import org.csu.os.domain.pojo.MyProgress;
-import org.csu.os.domain.table.ReadyQueue;
-import org.csu.os.domain.table.RunningPCB;
+import org.csu.os.domain.pojo.PCB;
+import org.csu.os.domain.pojo.Progress;
+import org.csu.os.service.controller.CPUController;
+import org.csu.os.service.controller.PCBController;
+import org.csu.os.service.table.CPUTableData;
+import org.csu.os.service.table.ReadyTableData;
 import org.csu.os.view.MainFrame;
 
-import java.util.*;
-import static org.csu.os.service.DispatchMode.*;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import static org.csu.os.service.Static.mode;
 
 public class AutoMoving {
-    private static boolean state = false;
-
-    private static int step = 1;  // 这个要出问题的  看看doRRMoving里面
+    private static boolean started = false;
     private static int systemTime = 0;
+    private static int step = 1;
     private static MainFrame targetFrame;
 
     private static Timer SystemTimer;
 
     public static void start(MainFrame targetFrame) {
-        if (state) return; // 如果已经开始了就返回吧
-        state = true;
+        if (started) return; // 如果已经开始了就返回吧
+        started = true;
         AutoMoving.targetFrame = targetFrame;
         SystemTimer = new Timer(true);
         SystemTimer.schedule(new TimerTask() {
@@ -29,120 +32,127 @@ public class AutoMoving {
             public void run() {
                 doMoving();
             }
-        }, 0, 1000); // 每100毫秒进行一次
-    }
-
-    public static int getSystemTime() {
-        return systemTime;
+        }, 0, 500); // 每500毫秒进行一次
     }
 
     public static void pause() {
-        if (!state) return;
-        state = false;
+        if (!started) return;
+        started = false;
         SystemTimer.cancel();
-        HangUp.doHangUp(targetFrame);
+        SystemTimer.purge();
+        PCBController.suspend(-1);
     }
 
     private static void doMoving() {
         systemTime++;
-        ReadyQueue.updateWaitTime(step);
+        ReadyTableData.updateWaitingTime();
 
-        switch (mode) {
-            case FCFS:
-                doFCFSMoving();
-                break;
-            case PSA:
-                doPSAMoving();
-                break;
-            case RR:
-                doRRMoving();
-                break;
-            case SJF:
-                doSJFMoving();
-                break;
-            case MQ:
-                doMQMoving();
-                break;
-            case MFQ:
-                doMFQMoving();
-                break;
-            default:
-                break;
+        try {
+            switch (mode) {
+                case FCFS:
+                    doFCFSMoving();
+                    break;
+                case PSA:
+                    doPSAMoving();
+                    break;
+                case RR:
+                    doRRMoving();
+                    break;
+                case SJF:
+                    doSJFMoving();
+                    break;
+                case MQ:
+                    doMQMoving();
+                    break;
+                case MFQ:
+                    doMFQMoving();
+                    break;
+                default:
+                    break;
+            }
+        } catch (Exception e) {
+            System.out.println("Hello");
         }
     }
 
-    private static void doFCFSMoving() {
-        MyPCB myPCB = RunningPCB.getRunningPCB();
-        if (myPCB == null) return;
-        MyProgress myProgress = myPCB.getMyProgress();
-        myProgress.setTime(myProgress.getTime() - step);
-        if (myProgress.getTime() <= 0) RunningPCB.finishRunning();
+    private static void doFCFSMoving() throws Exception{
+        PCB pcb = CPUTableData.getRunningPCB();
+        if (pcb == null) return;
+        Progress progress = pcb.getMyProgress();
+        progress.updateTimeLength();
+        if (progress.getTimeLength() <= 0) CPUController.terminal();
 
         targetFrame.refresh();
     }
 
-    private static void doPSAMoving() {
-        MyPCB myPCB = RunningPCB.getRunningPCB();
+    private static void doPSAMoving() throws Exception{
+        PCB myPCB = CPUTableData.getRunningPCB();
         if (myPCB == null) return;
-        MyProgress myProgress = myPCB.getMyProgress();
-        myProgress.setTime(myProgress.getTime() - step);
-        myProgress.setPriority(myProgress.getPriority() - step);
-        RunningPCB.cutRunning();
+        Progress progress = myPCB.getMyProgress();
+        progress.updateTimeLength();
+        progress.updatePriority();
+        CPUController.terminal();
 
         targetFrame.refresh();
     }
 
-    private static void doRRMoving() {
-        MyPCB myPCB = RunningPCB.getRunningPCB();
-        if (myPCB == null) return;
-        MyProgress myProgress = myPCB.getMyProgress();
-        myProgress.setTime(myProgress.getTime() - step);
-        RunningPCB.updateTimeSlice(step);  // 看吧 这里要出问题的  因为这个每次只是更新1 而已
-        if (RunningPCB.getTimeSlice() <= 0 || myProgress.getTime() <= 0) RunningPCB.cutRunning();
+    private static void doRRMoving() throws Exception{
+        PCB pcb = CPUTableData.getRunningPCB();
+        if (pcb == null) return;
+        Progress progress = pcb.getMyProgress();
+        progress.updateTimeLength();
+        CPUTableData.updateRemainTimeSlice();
+        if (CPUTableData.getRemainTimeSlice() <= 0 || progress.getTimeLength() <= 0) CPUController.terminal();
 
         targetFrame.refresh();
     }
 
-    private static void doSJFMoving() {
+    private static void doSJFMoving() throws Exception{
         doFCFSMoving();
     }
 
-    private static void doMQMoving() {
-        MyPCB myPCB = RunningPCB.getRunningPCB();
-        if (myPCB == null) return;
-        MyProgress myProgress = myPCB.getMyProgress();
-        myProgress.setTime(myProgress.getTime() - step);
-        if (myProgress.getQueueOrder() == 1) {
-            // 前台队列
-            RunningPCB.updateTimeSlice(step);  // 执行时间片轮转操作
-            if (RunningPCB.getTimeSlice() <= 0 || myProgress.getTime() <= 0) RunningPCB.cutRunning();
+    private static void doMQMoving() throws Exception{
+        PCB pcb = CPUTableData.getRunningPCB();
+        if (pcb == null) return;
+        Progress progress = pcb.getMyProgress();
+        progress.updateTimeLength();
+        if (progress.getQueueOrder() == 1) {
+            // 前台队列 额外判断一下时间片
+            CPUTableData.updateRemainTimeSlice();
+            if (CPUTableData.getRemainTimeSlice() <= 0) CPUController.terminal();
         }
-        else {
-            // 后台队列
-//            myProgress.setPriority(myProgress.getPriority() - step);  还是不可抢占吧
-            if (myProgress.getTime() <= 0) RunningPCB.finishRunning();
+
+        if (progress.getTimeLength() <= 0) CPUController.terminal();
+
+        targetFrame.refresh();
+    }
+
+    private static void doMFQMoving() throws Exception{
+        PCB pcb = CPUTableData.getRunningPCB();
+        if (pcb == null) return;
+        Progress progress = pcb.getMyProgress();
+        progress.updateTimeLength();
+        CPUTableData.updateRemainTimeSlice();
+        if (CPUTableData.getRemainTimeSlice() <= 0 || progress.getTimeLength() <= 0) {
+            progress.setQueueOrder(progress.getQueueOrder() + 1);
+            CPUController.terminal();
         }
 
         targetFrame.refresh();
     }
 
-    private static void doMFQMoving() {
-        MyPCB myPCB = RunningPCB.getRunningPCB();
-        if (myPCB == null) return;
-        MyProgress myProgress = myPCB.getMyProgress();
-        myProgress.setTime(myProgress.getTime() - step);
-        RunningPCB.updateTimeSlice(step);  // 看吧 这里要出问题的  因为这个每次只是更新1 而已
-        if (RunningPCB.getTimeSlice() <= 0 || myProgress.getTime() <= 0) {
-            myProgress.setQueueOrder(myProgress.getQueueOrder() + 1);
-            RunningPCB.cutRunning();
-        }
-
-        targetFrame.refresh();
+    public static int getSystemTime(){
+        return systemTime;
     }
 
-    public static void clear() {
-        pause();
-        step = 1;
+    public static void init() {
+        if (SystemTimer != null) {
+            SystemTimer.cancel();
+            SystemTimer.purge();
+        }
+        SystemTimer = null;
+        targetFrame = null;
         systemTime = 0;
+        started = false;
     }
 }
